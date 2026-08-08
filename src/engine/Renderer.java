@@ -81,6 +81,11 @@ public class Renderer {
     // Frame control
     // -----------------------------
     public void beginFrame() {
+        int[] w = new int[1];
+        int[] h = new int[1];
+        GLFW.glfwGetFramebufferSize(window, w, h);
+        glViewport(0, 0, w[0], h[0]);
+
         glClearColor(0.4f, 0.7f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
@@ -89,18 +94,29 @@ public class Renderer {
     // Draw world (with atlas + block uniforms)
     // -----------------------------
     public void drawWorld() {
+        if (view == null || projection == null) {
+            return; // avoid undefined shader state
+        }
         glUseProgram(shaderProgram);
 
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), false, view);
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), false, projection);
+        int viewLoc = glGetUniformLocation(shaderProgram, "view");
+        int projLoc = glGetUniformLocation(shaderProgram, "projection");
+
+        if (viewLoc >= 0) {
+            glUniformMatrix4fv(viewLoc, false, view);
+        }
+        if (projLoc >= 0) {
+            glUniformMatrix4fv(projLoc, false, projection);
+        }
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, textureId);
         glUniform1i(glGetUniformLocation(shaderProgram, "tex"), 0);
 
         for (Chunk chunk : world.getVisibleChunks()) {
-            if (!chunk.hasMesh()) continue;
-
+            if (!chunk.hasMesh()) {
+                continue;
+            }
             glBindVertexArray(chunk.getVAO());
             glDrawElements(GL_TRIANGLES, chunk.getIndexCount(), GL_UNSIGNED_INT, 0);
         }

@@ -50,46 +50,91 @@ public class Chunk {
     // -----------------------------------------
     // Mesh building (positions + UVs)
     // -----------------------------------------
+    // inside Chunk.java — replace existing buildMesh() with this
     public void buildMesh() {
 
-        // Delete old mesh
+        // Delete old mesh safely
         if (vao != 0) {
             glDeleteVertexArrays(vao);
             glDeleteBuffers(vbo);
             glDeleteBuffers(ebo);
+            vao = vbo = ebo = 0;
+            indexCount = 0;
         }
 
         final float SCALE = 2.0f;
 
-        float[] verts = new float[SX * SY * SZ * 6 * 4 * 5];
-        int[] inds = new int[SX * SY * SZ * 6 * 6];
+        // ---------- PASS 1: count faces ----------
+        int faceCount = 0;
+        for (int y = 0; y < SY; y++) {
+            for (int z = 0; z < SZ; z++) {
+                for (int x = 0; x < SX; x++) {
+                    int id = getBlock(x, y, z);
+                    if (!Block.isSolid(id)) {
+                        continue;
+                    }
+
+                    if (x == SX - 1 || !Block.isSolid(getBlock(x + 1, y, z))) {
+                        faceCount++;
+                    }
+                    if (x == 0 || !Block.isSolid(getBlock(x - 1, y, z))) {
+                        faceCount++;
+                    }
+                    if (y == SY - 1 || !Block.isSolid(getBlock(x, y + 1, z))) {
+                        faceCount++;
+                    }
+                    if (y == 0 || !Block.isSolid(getBlock(x, y - 1, z))) {
+                        faceCount++;
+                    }
+                    if (z == SZ - 1 || !Block.isSolid(getBlock(x, y, z + 1))) {
+                        faceCount++;
+                    }
+                    if (z == 0 || !Block.isSolid(getBlock(x, y, z - 1))) {
+                        faceCount++;
+                    }
+                }
+            }
+        }
+
+        if (faceCount == 0) {
+            // nothing to draw
+            indexCount = 0;
+            vao = 0;
+            return;
+        }
+
+        // Each face = 4 vertices (5 floats each) and 6 indices
+        float[] verts = new float[faceCount * 4 * 5];
+        int[] inds = new int[faceCount * 6];
 
         int vpos = 0;
         int ipos = 0;
         int base = 0;
 
+        // ---------- PASS 2: fill buffers ----------
         for (int y = 0; y < SY; y++) {
             for (int z = 0; z < SZ; z++) {
                 for (int x = 0; x < SX; x++) {
 
                     int id = getBlock(x, y, z);
-                    if (!Block.isSolid(id)) continue;
+                    if (!Block.isSolid(id)) {
+                        continue;
+                    }
 
                     float wx = (cx * SX + x) * SCALE;
                     float wy = (cy * SY + y) * SCALE;
                     float wz = (cz * SZ + z) * SCALE;
 
                     float[][][] uv = Block.getUVs(id);
-
                     float sx = SCALE;
 
                     // +X
                     if (x == SX - 1 || !Block.isSolid(getBlock(x + 1, y, z))) {
                         vpos = addFace(verts, vpos,
-                                wx + sx, wy,      wz,      uv[0][0][0], uv[0][0][1],
-                                wx + sx, wy + sx, wz,      uv[0][1][0], uv[0][1][1],
+                                wx + sx, wy, wz, uv[0][0][0], uv[0][0][1],
+                                wx + sx, wy + sx, wz, uv[0][1][0], uv[0][1][1],
                                 wx + sx, wy + sx, wz + sx, uv[0][2][0], uv[0][2][1],
-                                wx + sx, wy,      wz + sx, uv[0][3][0], uv[0][3][1]);
+                                wx + sx, wy, wz + sx, uv[0][3][0], uv[0][3][1]);
                         ipos = addIndices(inds, ipos, base);
                         base += 4;
                     }
@@ -97,10 +142,10 @@ public class Chunk {
                     // -X
                     if (x == 0 || !Block.isSolid(getBlock(x - 1, y, z))) {
                         vpos = addFace(verts, vpos,
-                                wx,      wy,      wz,      uv[1][0][0], uv[1][0][1],
-                                wx,      wy + sx, wz,      uv[1][1][0], uv[1][1][1],
-                                wx,      wy + sx, wz + sx, uv[1][2][0], uv[1][2][1],
-                                wx,      wy,      wz + sx, uv[1][3][0], uv[1][3][1]);
+                                wx, wy, wz, uv[1][0][0], uv[1][0][1],
+                                wx, wy + sx, wz, uv[1][1][0], uv[1][1][1],
+                                wx, wy + sx, wz + sx, uv[1][2][0], uv[1][2][1],
+                                wx, wy, wz + sx, uv[1][3][0], uv[1][3][1]);
                         ipos = addIndices(inds, ipos, base);
                         base += 4;
                     }
@@ -108,10 +153,10 @@ public class Chunk {
                     // +Y
                     if (y == SY - 1 || !Block.isSolid(getBlock(x, y + 1, z))) {
                         vpos = addFace(verts, vpos,
-                                wx,      wy + sx, wz,      uv[2][0][0], uv[2][0][1],
-                                wx + sx, wy + sx, wz,      uv[2][1][0], uv[2][1][1],
+                                wx, wy + sx, wz, uv[2][0][0], uv[2][0][1],
+                                wx + sx, wy + sx, wz, uv[2][1][0], uv[2][1][1],
                                 wx + sx, wy + sx, wz + sx, uv[2][2][0], uv[2][2][1],
-                                wx,      wy + sx, wz + sx, uv[2][3][0], uv[2][3][1]);
+                                wx, wy + sx, wz + sx, uv[2][3][0], uv[2][3][1]);
                         ipos = addIndices(inds, ipos, base);
                         base += 4;
                     }
@@ -119,10 +164,10 @@ public class Chunk {
                     // -Y
                     if (y == 0 || !Block.isSolid(getBlock(x, y - 1, z))) {
                         vpos = addFace(verts, vpos,
-                                wx,      wy,      wz,      uv[3][0][0], uv[3][0][1],
-                                wx + sx, wy,      wz,      uv[3][1][0], uv[3][1][1],
-                                wx + sx, wy,      wz + sx, uv[3][2][0], uv[3][2][1],
-                                wx,      wy,      wz + sx, uv[3][3][0], uv[3][3][1]);
+                                wx, wy, wz, uv[3][0][0], uv[3][0][1],
+                                wx + sx, wy, wz, uv[3][1][0], uv[3][1][1],
+                                wx + sx, wy, wz + sx, uv[3][2][0], uv[3][2][1],
+                                wx, wy, wz + sx, uv[3][3][0], uv[3][3][1]);
                         ipos = addIndices(inds, ipos, base);
                         base += 4;
                     }
@@ -130,10 +175,10 @@ public class Chunk {
                     // +Z
                     if (z == SZ - 1 || !Block.isSolid(getBlock(x, y, z + 1))) {
                         vpos = addFace(verts, vpos,
-                                wx,      wy,      wz + sx, uv[4][0][0], uv[4][0][1],
-                                wx + sx, wy,      wz + sx, uv[4][1][0], uv[4][1][1],
+                                wx, wy, wz + sx, uv[4][0][0], uv[4][0][1],
+                                wx + sx, wy, wz + sx, uv[4][1][0], uv[4][1][1],
                                 wx + sx, wy + sx, wz + sx, uv[4][2][0], uv[4][2][1],
-                                wx,      wy + sx, wz + sx, uv[4][3][0], uv[4][3][1]);
+                                wx, wy + sx, wz + sx, uv[4][3][0], uv[4][3][1]);
                         ipos = addIndices(inds, ipos, base);
                         base += 4;
                     }
@@ -141,10 +186,10 @@ public class Chunk {
                     // -Z
                     if (z == 0 || !Block.isSolid(getBlock(x, y, z - 1))) {
                         vpos = addFace(verts, vpos,
-                                wx,      wy,      wz,      uv[5][0][0], uv[5][0][1],
-                                wx + sx, wy,      wz,      uv[5][1][0], uv[5][1][1],
-                                wx + sx, wy + sx, wz,      uv[5][2][0], uv[5][2][1],
-                                wx,      wy + sx, wz,      uv[5][3][0], uv[5][3][1]);
+                                wx, wy, wz, uv[5][0][0], uv[5][0][1],
+                                wx + sx, wy, wz, uv[5][1][0], uv[5][1][1],
+                                wx + sx, wy + sx, wz, uv[5][2][0], uv[5][2][1],
+                                wx, wy + sx, wz, uv[5][3][0], uv[5][3][1]);
                         ipos = addIndices(inds, ipos, base);
                         base += 4;
                     }
@@ -152,8 +197,19 @@ public class Chunk {
             }
         }
 
+        // Basic NaN check (defensive)
+        for (int i = 0; i < vpos; i++) {
+            if (Float.isNaN(verts[i]) || Float.isInfinite(verts[i])) {
+                // Something went wrong building this mesh; abort and keep chunk without mesh
+                indexCount = 0;
+                vao = 0;
+                return;
+            }
+        }
+
         indexCount = ipos;
 
+        // ---------- Upload to GL ----------
         vao = glGenVertexArrays();
         glBindVertexArray(vao);
 
@@ -180,10 +236,10 @@ public class Chunk {
     // Face builder helpers (positions + UVs)
     // -----------------------------------------
     private int addFace(float[] v, int p,
-                        float x0, float y0, float z0, float u0, float v0,
-                        float x1, float y1, float z1, float u1, float v1,
-                        float x2, float y2, float z2, float u2, float v2,
-                        float x3, float y3, float z3, float u3, float v3) {
+            float x0, float y0, float z0, float u0, float v0,
+            float x1, float y1, float z1, float u1, float v1,
+            float x2, float y2, float z2, float u2, float v2,
+            float x3, float y3, float z3, float u3, float v3) {
 
         p = addVertex(v, p, x0, y0, z0, u0, v0);
         p = addVertex(v, p, x1, y1, z1, u1, v1);
@@ -216,14 +272,14 @@ public class Chunk {
     // Renderer access
     // -----------------------------------------
     public boolean hasMesh() {
-        return vao != 0;
+        return vao != 0 && indexCount > 0;
+    }
+
+    public int getIndexCount() {
+        return Math.max(0, indexCount);
     }
 
     public int getVAO() {
         return vao;
-    }
-
-    public int getIndexCount() {
-        return indexCount;
     }
 }

@@ -8,9 +8,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-
-import org.json.JSONObject;
-import org.json.JSONException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -75,28 +74,30 @@ public class Font {
     private void loadMetadata(String path) {
         try {
             String jsonText = Files.readString(Paths.get(path));
-            JSONObject root = new JSONObject(jsonText);
+            Pattern glyphPattern = Pattern.compile("\\\"(.*?)\\\"\\s*:\\s*\\{\\s*\\\"x\\\"\\s*:\\s*(-?\\d+)\\s*,\\s*\\\"y\\\"\\s*:\\s*(-?\\d+)\\s*,\\s*\\\"w\\\"\\s*:\\s*(-?\\d+)\\s*,\\s*\\\"h\\\"\\s*:\\s*(-?\\d+)\\s*,\\s*\\\"u0\\\"\\s*:\\s*([-+0-9.eE]+)\\s*,\\s*\\\"v0\\\"\\s*:\\s*([-+0-9.eE]+)\\s*,\\s*\\\"u1\\\"\\s*:\\s*([-+0-9.eE]+)\\s*,\\s*\\\"v1\\\"\\s*:\\s*([-+0-9.eE]+)\\s*\\}", Pattern.DOTALL);
+            Matcher matcher = glyphPattern.matcher(jsonText);
 
-            for (int i = 32; i < 127; i++) {
-                char ch = (char) i;
-                if (!root.has(String.valueOf(ch))) continue;
+            while (matcher.find()) {
+                String key = matcher.group(1);
+                if (key.length() != 1) continue;
 
-                JSONObject g = root.getJSONObject(String.valueOf(ch));
+                char ch = key.charAt(0);
+                if (ch < 0 || ch >= 128) continue;
 
                 Glyph glyph = new Glyph();
-                glyph.x = g.getInt("x");
-                glyph.y = g.getInt("y");
-                glyph.w = g.getInt("w");
-                glyph.h = g.getInt("h");
-                glyph.u0 = (float) g.getDouble("u0");
-                glyph.v0 = (float) g.getDouble("v0");
-                glyph.u1 = (float) g.getDouble("u1");
-                glyph.v1 = (float) g.getDouble("v1");
+                glyph.x = Integer.parseInt(matcher.group(2));
+                glyph.y = Integer.parseInt(matcher.group(3));
+                glyph.w = Integer.parseInt(matcher.group(4));
+                glyph.h = Integer.parseInt(matcher.group(5));
+                glyph.u0 = Float.parseFloat(matcher.group(6));
+                glyph.v0 = Float.parseFloat(matcher.group(7));
+                glyph.u1 = Float.parseFloat(matcher.group(8));
+                glyph.v1 = Float.parseFloat(matcher.group(9));
 
-                glyphs[i] = glyph;
+                glyphs[ch] = glyph;
             }
 
-        } catch (IOException | JSONException e) {
+        } catch (IOException e) {
             throw new RuntimeException("Failed to load font metadata: " + path, e);
         }
     }

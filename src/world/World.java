@@ -1,9 +1,8 @@
 package world;
 
-import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-
 import worldgen.WorldGen;
 
 public class World {
@@ -13,12 +12,24 @@ public class World {
     public static final int CHUNK_SIZE_Z = 16;
 
     private final HashMap<Long, Chunk> chunks = new HashMap<>();
-    private final WorldGen generator;
+    private WorldGen generator;
 
     private int renderDistance = 4;
 
+    public World() {
+        this(new WorldGen());
+    }
+
     public World(WorldGen generator) {
         this.generator = generator;
+    }
+
+    public void generateAll(WorldGen generator) {
+        this.generator = generator;
+        for (Chunk chunk : chunks.values()) {
+            generator.generate(chunk);
+            chunk.buildMesh();
+        }
     }
 
     // -----------------------------------------
@@ -52,27 +63,37 @@ public class World {
     // Block access
     // -----------------------------------------
     public int getBlock(int x, int y, int z) {
-        int cx = x / CHUNK_SIZE_X;
-        int cy = y / CHUNK_SIZE_Y;
-        int cz = z / CHUNK_SIZE_Z;
+        int cx = Math.floorDiv(x, CHUNK_SIZE_X);
+        int cy = Math.floorDiv(y, CHUNK_SIZE_Y);
+        int cz = Math.floorDiv(z, CHUNK_SIZE_Z);
 
         Chunk c = getChunk(cx, cy, cz);
-        return c.getBlock(x % CHUNK_SIZE_X, y % CHUNK_SIZE_Y, z % CHUNK_SIZE_Z);
+        int lx = Math.floorMod(x, CHUNK_SIZE_X);
+        int ly = Math.floorMod(y, CHUNK_SIZE_Y);
+        int lz = Math.floorMod(z, CHUNK_SIZE_Z);
+        return c.getBlock(lx, ly, lz);
     }
 
     public void setBlock(int x, int y, int z, int id) {
-        int cx = x / CHUNK_SIZE_X;
-        int cy = y / CHUNK_SIZE_Y;
-        int cz = z / CHUNK_SIZE_Z;
+        int cx = Math.floorDiv(x, CHUNK_SIZE_X);
+        int cy = Math.floorDiv(y, CHUNK_SIZE_Y);
+        int cz = Math.floorDiv(z, CHUNK_SIZE_Z);
 
         Chunk c = getChunk(cx, cy, cz);
-        c.setBlock(x % CHUNK_SIZE_X, y % CHUNK_SIZE_Y, z % CHUNK_SIZE_Z, id);
+        int lx = Math.floorMod(x, CHUNK_SIZE_X);
+        int ly = Math.floorMod(y, CHUNK_SIZE_Y);
+        int lz = Math.floorMod(z, CHUNK_SIZE_Z);
+        c.setBlock(lx, ly, lz, id);
         c.buildMesh();
     }
 
     // -----------------------------------------
     // Visible chunks for renderer
     // -----------------------------------------
+    public List<Chunk> getVisibleChunks() {
+        return getVisibleChunks(0f, 0f, 0f);
+    }
+
     public List<Chunk> getVisibleChunks(float px, float py, float pz) {
         List<Chunk> list = new ArrayList<>();
 

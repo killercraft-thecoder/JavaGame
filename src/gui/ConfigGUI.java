@@ -7,11 +7,12 @@ public class ConfigGUI {
 
     public enum Screen {
         MAIN_MENU,
+        PLAYING,
         PAUSE_MENU,
         SETTINGS
     }
 
-    private Screen currentScreen = Screen.MAIN_MENU;
+    private Screen currentScreen = Screen.PLAYING;
 
     // Example setting
     private int renderDistance = 4; // default
@@ -25,37 +26,46 @@ public class ConfigGUI {
     }
 
     // Called every frame by your Renderer
-    public void draw() {
+    public void draw(int width, int height) {
+        if (currentScreen == Screen.PLAYING) {
+            drawCrosshair(width, height);
+            return;
+        }
+
+        drawCrosshair(width, height);
+
         switch (currentScreen) {
             case MAIN_MENU:
-                drawMainMenu();
+                drawMainMenu(width, height);
                 break;
             case PAUSE_MENU:
-                drawPauseMenu();
+                drawPauseMenu(width, height);
                 break;
             case SETTINGS:
-                drawSettings();
+                drawSettings(width, height);
+                break;
+            default:
                 break;
         }
     }
 
-    private void drawMainMenu() {
-        drawBackground();
+    private void drawMainMenu(int width, int height) {
+        drawBackground(width, height);
         drawText("MyVoxelGame", 50, 50);
         drawText("Press ENTER to Play", 50, 100);
         drawText("Press S for Settings", 50, 130);
     }
 
-    private void drawPauseMenu() {
-        drawBackground();
+    private void drawPauseMenu(int width, int height) {
+        drawBackground(width, height);
         drawText("Paused", 50, 50);
         drawText("Press R to Resume", 50, 100);
         drawText("Press S for Settings", 50, 130);
         drawText("Press ESC for Main Menu", 50, 160);
     }
 
-    private void drawSettings() {
-        drawBackground();
+    private void drawSettings(int width, int height) {
+        drawBackground(width, height);
         drawText("Settings", 50, 50);
 
         drawText("Render Distance: " + renderDistance + " Chunks", 50, 100);
@@ -64,17 +74,25 @@ public class ConfigGUI {
 
     // Called by your input system
     public void handleInput(long window) {
-        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ENTER) == GLFW.GLFW_PRESS) {
-            if (currentScreen == Screen.MAIN_MENU) {
-                currentScreen = Screen.PAUSE_MENU; // game starts
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
+            if (currentScreen == Screen.PLAYING) {
+                currentScreen = Screen.PAUSE_MENU;
+            } else if (currentScreen == Screen.PAUSE_MENU) {
+                currentScreen = Screen.PLAYING;
+            } else if (currentScreen == Screen.SETTINGS) {
+                currentScreen = Screen.PLAYING;
+            } else if (currentScreen == Screen.MAIN_MENU) {
+                currentScreen = Screen.PLAYING;
             }
         }
 
-        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
-            currentScreen = Screen.MAIN_MENU;
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ENTER) == GLFW.GLFW_PRESS) {
+            if (currentScreen == Screen.MAIN_MENU) {
+                currentScreen = Screen.PLAYING;
+            }
         }
 
-        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_S) == GLFW.GLFW_PRESS) {
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_S) == GLFW.GLFW_PRESS && currentScreen == Screen.PLAYING) {
             currentScreen = Screen.SETTINGS;
         }
 
@@ -90,15 +108,30 @@ public class ConfigGUI {
 
     // --- Simple drawing helpers (OpenGL immediate mode) ---
 
-    private void drawBackground() {
+    private void drawBackground(int width, int height) {
         GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glColor3f(0.1f, 0.1f, 0.1f);
-
+        GL11.glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glVertex2f(0, 0);
-        GL11.glVertex2f(800, 0);
-        GL11.glVertex2f(800, 600);
-        GL11.glVertex2f(0, 600);
+        GL11.glVertex2f(width, 0);
+        GL11.glVertex2f(width, height);
+        GL11.glVertex2f(0, height);
+        GL11.glEnd();
+    }
+
+    private void drawCrosshair(int width, int height) {
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glColor3f(0.0f, 0.0f, 0.0f);
+
+        float midX = width * 0.5f;
+        float midY = height * 0.5f;
+        float crossSize = 8.0f;
+
+        GL11.glBegin(GL11.GL_LINES);
+        GL11.glVertex2f(midX - crossSize, midY);
+        GL11.glVertex2f(midX + crossSize, midY);
+        GL11.glVertex2f(midX, midY - crossSize);
+        GL11.glVertex2f(midX, midY + crossSize);
         GL11.glEnd();
     }
 

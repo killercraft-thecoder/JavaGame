@@ -1,16 +1,25 @@
 package engine;
 
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 
+import font.Font;
+import font.TextRenderer;
+import gui.ConfigGUI;
+import world.Block;
 import world.World;
 import worldgen.WorldGen;
-import world.Block;
 
 public class Main {
 
     private static long window;
+    private static int windowWidth = 1280;
+    private static int windowHeight = 720;
+    private static int lastWindowX = 100;
+    private static int lastWindowY = 100;
+    private static boolean fullscreen = false;
 
     public static void main(String[] args) {
 
@@ -21,17 +30,33 @@ public class Main {
             throw new IllegalStateException("GLFW failed to initialize");
         }
 
-        GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE, GLFW.GLFW_TRUE);
 
-        window = GLFW.glfwCreateWindow(1280, 720, "Voxel Engine", 0, 0);
+        window = GLFW.glfwCreateWindow(windowWidth, windowHeight, "Voxel Engine", 0, 0);
         if (window == 0) {
             throw new RuntimeException("Failed to create window");
         }
+
+        GLFW.glfwSetFramebufferSizeCallback(window, (win, w, h) -> {
+            if (w > 0 && h > 0) {
+                windowWidth = w;
+                windowHeight = h;
+                GL11.glViewport(0, 0, w, h);
+            }
+        });
+
+        GLFW.glfwSetWindowPosCallback(window, (win, x, y) -> {
+            if (!fullscreen) {
+                lastWindowX = x;
+                lastWindowY = y;
+            }
+        });
 
         GLFW.glfwMakeContextCurrent(window);
         GLFW.glfwSwapInterval(1); // vsync
 
         GL.createCapabilities();
+        GL11.glViewport(0, 0, windowWidth, windowHeight);
 
         // -----------------------------------------
         // Load texture atlas
@@ -41,19 +66,18 @@ public class Main {
         // -----------------------------------------
         // Create world + generate terrain
         // -----------------------------------------
-        World world = new World();
-        WorldGen gen = new WorldGen();
-        world.generateAll(gen);
+        World world = new World(new WorldGen());
 
         // -----------------------------------------
         // Input + Renderer + Game
         // -----------------------------------------
         Input input = new Input(window);
-        ConfigGUI gui = new ConfigGUI();   // if you have one
-        TextRenderer text = new TextRenderer(); // if you have one
+        ConfigGUI gui = new ConfigGUI();
+        Font font = new Font("font.png", "font.json");
+        TextRenderer text = new TextRenderer(font);
 
-        Renderer renderer = new Renderer(world, gui, text, textureId);
-        Game game = new Game(world, renderer, input);
+        Renderer renderer = new Renderer(world, gui, text, textureId, window);
+        Game game = new Game(world, renderer, input, window, gui);
 
         // -----------------------------------------
         // Main Loop
@@ -61,6 +85,7 @@ public class Main {
         while (!GLFW.glfwWindowShouldClose(window)) {
 
             GLFW.glfwPollEvents();
+            gui.handleInput(window);
 
             game.update();
             game.render();
@@ -73,6 +98,34 @@ public class Main {
         // -----------------------------------------
         GLFW.glfwDestroyWindow(window);
         GLFW.glfwTerminate();
+    }
+
+    public static void toggleFullscreen() {
+        long monitor = GLFW.glfwGetPrimaryMonitor();
+        if (monitor == 0L) {
+            return;
+        }
+
+        if (!fullscreen) {
+            int[] x = new int[1];
+            int[] y = new int[1];
+            GLFW.glfwGetWindowPos(window, x, y);
+            lastWindowX = x[0];
+            lastWindowY = y[0];
+
+            int[] w = new int[1];
+            int[] h = new int[1];
+            GLFW.glfwGetWindowSize(window, w, h);
+            windowWidth = w[0];
+            windowHeight = h[0];
+
+            GLFWVidMode mode = GLFW.glfwGetVideoMode(monitor);
+            GLFW.glfwSetWindowMonitor(window, monitor, 0, 0, mode.width(), mode.height(), mode.refreshRate());
+            fullscreen = true;
+        } else {
+            GLFW.glfwSetWindowMonitor(window, 0L, lastWindowX, lastWindowY, windowWidth, windowHeight, GLFW.GLFW_DONT_CARE);
+            fullscreen = false;
+        }
     }
 
     // -----------------------------------------

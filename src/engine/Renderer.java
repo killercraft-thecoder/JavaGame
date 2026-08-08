@@ -4,6 +4,8 @@ import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
 
+import org.lwjgl.glfw.GLFW;
+
 import world.World;
 import world.Chunk;
 import world.Block;
@@ -14,6 +16,7 @@ public class Renderer {
 
     private int shaderProgram;
     private int textureId;
+    private long window;
 
     private float[] projection;
     private float[] view;
@@ -22,15 +25,15 @@ public class Renderer {
     private ConfigGUI gui;
     private TextRenderer text;
 
-    public Renderer(World world, ConfigGUI gui, TextRenderer text, int textureId) {
+    public Renderer(World world, ConfigGUI gui, TextRenderer text, int textureId, long window) {
         this.world = world;
         this.gui = gui;
         this.text = text;
         this.textureId = textureId;
+        this.window = window;
 
         glEnable(GL_DEPTH_TEST);
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
+        glDisable(GL_CULL_FACE);
 
         shaderProgram = loadShaderProgram("shaders/block.vert", "shaders/block.frag");
     }
@@ -78,6 +81,7 @@ public class Renderer {
     // Frame control
     // -----------------------------
     public void beginFrame() {
+        glClearColor(0.4f, 0.7f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
@@ -87,22 +91,12 @@ public class Renderer {
     public void drawWorld() {
         glUseProgram(shaderProgram);
 
-        // camera
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), false, view);
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), false, projection);
 
-        // texture
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, textureId);
         glUniform1i(glGetUniformLocation(shaderProgram, "tex"), 0);
-
-        // atlas info (from Block)
-        glUniform1i(glGetUniformLocation(shaderProgram, "atlasWidth"), Block.atlasWidth);
-        glUniform1i(glGetUniformLocation(shaderProgram, "atlasHeight"), Block.atlasHeight);
-
-        // for now: render as grass (blockId = 0) – you can change per-chunk later
-        int blockIdLocation = glGetUniformLocation(shaderProgram, "blockId");
-        glUniform1i(blockIdLocation, Block.GRASS);
 
         for (Chunk chunk : world.getVisibleChunks()) {
             if (!chunk.hasMesh()) continue;
@@ -116,11 +110,26 @@ public class Renderer {
     // Draw GUI
     // -----------------------------
     public void drawGUI() {
-        glDisable(GL_DEPTH_TEST);
+        int[] w = new int[1];
+        int[] h = new int[1];
+        GLFW.glfwGetFramebufferSize(window, w, h);
 
-        gui.draw();
+        glDisable(GL_DEPTH_TEST);
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0, w[0], h[0], 0, -1, 1);
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+
+        gui.draw(w[0], h[0]);
         text.drawText("Render Distance: " + gui.getRenderDistance(), 10, 10);
 
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
         glEnable(GL_DEPTH_TEST);
     }
 

@@ -6,13 +6,14 @@ public class Camera {
     // Perspective matrix
     // -----------------------------------------
     public float[] perspective(float fov, float aspect, float near, float far) {
-        float f = (float)(1.0 / Math.tan(Math.toRadians(fov) / 2));
+        float f = (float)(1.0 / Math.tan(Math.toRadians(fov) / 2.0));
+        float nf = 1.0f / (near - far);
 
-        return new float[]{
-            f / aspect, 0, 0, 0,
-            0, f, 0, 0,
-            0, 0, (far + near) / (near - far), -1,
-            0, 0, (2 * far * near) / (near - far), 0
+        return new float[] {
+            f / aspect, 0.0f, 0.0f, 0.0f,
+            0.0f, f, 0.0f, 0.0f,
+            0.0f, 0.0f, (far + near) * nf, -1.0f,
+            0.0f, 0.0f, (2.0f * far * near) * nf, 0.0f
         };
     }
 
@@ -20,35 +21,55 @@ public class Camera {
     // View matrix from yaw/pitch + position
     // -----------------------------------------
     public float[] look(float px, float py, float pz, float yaw, float pitch) {
+        float yawRad = (float)Math.toRadians(yaw);
+        float pitchRad = (float)Math.toRadians(pitch);
 
-        float cy = (float)Math.cos(Math.toRadians(yaw));
-        float sy = (float)Math.sin(Math.toRadians(yaw));
-        float cp = (float)Math.cos(Math.toRadians(pitch));
-        float sp = (float)Math.sin(Math.toRadians(pitch));
+        float sinY = (float)Math.sin(yawRad);
+        float cosY = (float)Math.cos(yawRad);
+        float sinP = (float)Math.sin(pitchRad);
+        float cosP = (float)Math.cos(pitchRad);
 
-        // forward vector
-        float fx = sy * cp;
-        float fy = sp;
-        float fz = -cy * cp;
-
-        // right vector
-        float rx = cy;
-        float ry = 0;
-        float rz = sy;
-
-        // up vector
-        float ux = -sy * sp;
-        float uy = cp;
-        float uz = cy * sp;
-
-        return new float[]{
-            rx,  ux, -fx, 0,
-            ry,  uy, -fy, 0,
-            rz,  uz, -fz, 0,
-            -(rx*px + ry*py + rz*pz),
-            -(ux*px + uy*py + uz*pz),
-            fx*px + fy*py + fz*pz,
-            1
+        float[] forward = {
+            sinY * cosP,
+            sinP,
+            -cosY * cosP
         };
+
+        float[] right = {
+            cosY,
+            0.0f,
+            sinY
+        };
+
+        float[] up = {
+            -sinY * sinP,
+            cosP,
+            cosY * sinP
+        };
+
+        float[] matrix = new float[16];
+
+        // OpenGL column-major view matrix for camera basis (right, up, forward)
+        matrix[0] = right[0];
+        matrix[1] = up[0];
+        matrix[2] = -forward[0];
+        matrix[3] = 0.0f;
+
+        matrix[4] = right[1];
+        matrix[5] = up[1];
+        matrix[6] = -forward[1];
+        matrix[7] = 0.0f;
+
+        matrix[8] = right[2];
+        matrix[9] = up[2];
+        matrix[10] = -forward[2];
+        matrix[11] = 0.0f;
+
+        matrix[12] = -(right[0] * px + right[1] * py + right[2] * pz);
+        matrix[13] = -(up[0] * px + up[1] * py + up[2] * pz);
+        matrix[14] = forward[0] * px + forward[1] * py + forward[2] * pz;
+        matrix[15] = 1.0f;
+
+        return matrix;
     }
 }

@@ -11,6 +11,7 @@ import world.Chunk;
 import world.Block;
 import font.TextRenderer;
 import gui.ConfigGUI;
+import engine.Game;
 
 public class Renderer {
 
@@ -93,7 +94,7 @@ public class Renderer {
     // -----------------------------
     // Draw world (with atlas + block uniforms)
     // -----------------------------
-    public void drawWorld() {
+    public void drawWorld(Game game) {
         if (view == null || projection == null) {
             return; // avoid undefined shader state
         }
@@ -113,7 +114,7 @@ public class Renderer {
         glBindTexture(GL_TEXTURE_2D, textureId);
         glUniform1i(glGetUniformLocation(shaderProgram, "tex"), 0);
 
-        for (Chunk chunk : world.getVisibleChunks()) {
+        for (Chunk chunk : world.getVisibleChunks(game)) {
             if (!chunk.hasMesh()) {
                 continue;
             }

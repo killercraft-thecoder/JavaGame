@@ -5,6 +5,10 @@ import org.lwjgl.glfw.GLFW;
 import gui.ConfigGUI;
 import world.World;
 import world.Block;
+import engine.AABB;
+import font.TextRenderer;
+import font.Font;
+import org.lwjgl.opengl.GL11;
 
 public class Game {
 
@@ -18,29 +22,57 @@ public class Game {
     private ConfigGUI gui;
     private long window;
 
+    private AABB aabb;
+
+    private boolean debugVisible = false;
+    private boolean lastF3 = false;
+
+    private long lastFrameTime = System.nanoTime();
+    private float fps = 0f;
+
+    public long lightingTimeNs = 0;
+    public static long renderTimeNs = 0;
+
+    private TextRenderer textRenderer;
+
     private float px = 8.0f, py = 9.5f, pz = 8.0f;   // player position
     private float yaw = 45.0f, pitch = -18f;         // mouse look
     private boolean lastF11 = false;
 
     private final float speed = 0.45f;
     private final float mouseSensitivity = 0.12f;
+    public static final long startTimeNs = System.nanoTime();
+
+    private static long msSinceStart() {
+        return (System.nanoTime() - startTimeNs) / 1_000_000;
+    }
+    
+
 
     public Game(World world, Renderer renderer, Input input, long window, ConfigGUI gui) {
+        System.out.println("[INIT " + msSinceStart() + "ms] Game class initialized");
         this.world = world;
         this.renderer = renderer;
         this.input = input;
         this.window = window;
         this.gui = gui;
+        this.textRenderer = new TextRenderer(new Font("font.png", "font.json"));
+        System.out.println("[INIT " + msSinceStart() + "ms] TextRenderer initialized");
 
         camera = new Camera();
+        System.out.println("[INIT " + msSinceStart() + "ms] Camera initialized");
+        aabb = new AABB(world);   // NEW
+        System.out.println("[INIT " + msSinceStart() + "ms] AABB system initialized");
+
     }
 
     // -----------------------------------------
     // Update loop
     // -----------------------------------------
     public void update() {
-
+        this.lightingTimeNs = 0;
         if (gui.getScreen() == ConfigGUI.Screen.PLAYING) {
+            GLFW.glfwSetInputMode(window, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
             handleMouseLook();
             handleMovement();
             handleBlockActions();
@@ -52,6 +84,22 @@ public class Game {
         }
         lastF11 = f11Pressed;
 
+        // ESC opens config GUI
+        // ESC opens config GUI
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
+            gui.setScreen(ConfigGUI.Screen.MAIN_MENU);
+
+            // RELEASE MOUSE
+            GLFW.glfwSetInputMode(window, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+        }
+
+// F3 toggles debug overlay
+        boolean f3Pressed = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_F3) == GLFW.GLFW_PRESS;
+        if (f3Pressed && !lastF3) {
+            debugVisible = !debugVisible;
+        }
+        lastF3 = f3Pressed;
+
         int[] w = new int[1];
         int[] h = new int[1];
         GLFW.glfwGetFramebufferSize(window, w, h);
@@ -61,6 +109,11 @@ public class Game {
         float[] proj = camera.perspective(78f, aspect, 0.1f, 500f);
 
         renderer.setCamera(view, proj);
+
+        long now = System.nanoTime();
+        fps = 1_000_000_000f / (now - lastFrameTime);
+        lastFrameTime = now;
+
     }
 
     // -----------------------------------------
@@ -73,8 +126,12 @@ public class Game {
         yaw += dx * mouseSensitivity;
         pitch -= dy * mouseSensitivity;
 
-        if (pitch > 89) pitch = 89;
-        if (pitch < -89) pitch = -89;
+        if (pitch > 89) {
+            pitch = 89;
+        }
+        if (pitch < -89) {
+            pitch = -89;
+        }
     }
 
     // -----------------------------------------
@@ -82,8 +139,8 @@ public class Game {
     // -----------------------------------------
     private void handleMovement() {
 
-        float sinY = (float)Math.sin(Math.toRadians(yaw));
-        float cosY = (float)Math.cos(Math.toRadians(yaw));
+        float sinY = (float) Math.sin(Math.toRadians(yaw));
+        float cosY = (float) Math.cos(Math.toRadians(yaw));
 
         float moveX = 0.0f;
         float moveZ = 0.0f;
@@ -105,59 +162,36 @@ public class Game {
             moveZ += sinY * speed;
         }
 
+        float moveY = 0.0f;
+
         if (input.isKeyDown(GLFW.GLFW_KEY_SPACE)) {
-            movePlayer(0.0f, speed * 0.7f, 0.0f);
+            moveY += speed * 0.7f;
         }
         if (input.isKeyDown(GLFW.GLFW_KEY_LEFT_SHIFT)) {
-            movePlayer(0.0f, -speed * 0.7f, 0.0f);
+            moveY -= speed * 0.7f;
         }
 
-        movePlayer(moveX, 0.0f, moveZ);
+        movePlayer(moveX, moveY, moveZ);
     }
 
+    // -----------------------------------------
+    // Movement + AABB collision
+    // -----------------------------------------
     private void movePlayer(float dx, float dy, float dz) {
+
         float oldX = px;
         float oldY = py;
         float oldZ = pz;
 
-        px += dx;
-        if (isPlayerInsideBlock()) {
-            px = oldX;
-        }
+        float newX = px + dx;
+        float newY = py + dy;
+        float newZ = pz + dz;
 
-        pz += dz;
-        if (isPlayerInsideBlock()) {
-            pz = oldZ;
-        }
+        float[] corrected = aabb.resolve(newX, newY, newZ, oldX, oldY, oldZ);
 
-        py += dy;
-        if (isPlayerInsideBlock()) {
-            py = oldY;
-            if (dy > 0.0f) {
-                py += 0.05f;
-            }
-        }
-    }
-
-    private boolean isPlayerInsideBlock() {
-        float minX = px - PLAYER_HALF_WIDTH;
-        float maxX = px + PLAYER_HALF_WIDTH;
-        float minY = py;
-        float maxY = py + PLAYER_HEIGHT;
-        float minZ = pz - PLAYER_HALF_WIDTH;
-        float maxZ = pz + PLAYER_HALF_WIDTH;
-
-        for (int x = (int)Math.floor(minX); x <= (int)Math.floor(maxX); x++) {
-            for (int y = (int)Math.floor(minY); y <= (int)Math.floor(maxY); y++) {
-                for (int z = (int)Math.floor(minZ); z <= (int)Math.floor(maxZ); z++) {
-                    if (world.getBlock(x, y, z) != Block.AIR) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
+        px = corrected[0];
+        py = corrected[1];
+        pz = corrected[2];
     }
 
     // -----------------------------------------
@@ -165,9 +199,9 @@ public class Game {
     // -----------------------------------------
     private void handleBlockActions() {
 
-        float dirX = (float)Math.sin(Math.toRadians(yaw)) * (float)Math.cos(Math.toRadians(pitch));
-        float dirY = (float)Math.sin(Math.toRadians(pitch));
-        float dirZ = -(float)Math.cos(Math.toRadians(yaw)) * (float)Math.cos(Math.toRadians(pitch));
+        float dirX = (float) Math.sin(Math.toRadians(yaw)) * (float) Math.cos(Math.toRadians(pitch));
+        float dirY = (float) Math.sin(Math.toRadians(pitch));
+        float dirZ = -(float) Math.cos(Math.toRadians(yaw)) * (float) Math.cos(Math.toRadians(pitch));
 
         float rx = px;
         float ry = py + PLAYER_HEIGHT * 0.5f;
@@ -182,9 +216,9 @@ public class Game {
             ry += dirY * 0.2f;
             rz += dirZ * 0.2f;
 
-            int bx = (int)Math.floor(rx);
-            int by = (int)Math.floor(ry);
-            int bz = (int)Math.floor(rz);
+            int bx = (int) Math.floor(rx);
+            int by = (int) Math.floor(ry);
+            int bz = (int) Math.floor(rz);
 
             if (world.getBlock(bx, by, bz) != Block.AIR) {
                 hitX = bx;
@@ -204,11 +238,11 @@ public class Game {
             int placeZ = hitZ;
 
             if (Math.abs(dirX) >= Math.abs(dirY) && Math.abs(dirX) >= Math.abs(dirZ)) {
-                placeX += (int)Math.signum(dirX);
+                placeX += (int) Math.signum(dirX);
             } else if (Math.abs(dirY) >= Math.abs(dirX) && Math.abs(dirY) >= Math.abs(dirZ)) {
-                placeY += (int)Math.signum(dirY);
+                placeY += (int) Math.signum(dirY);
             } else {
-                placeZ += (int)Math.signum(dirZ);
+                placeZ += (int) Math.signum(dirZ);
             }
 
             if (world.getBlock(placeX, placeY, placeZ) == Block.AIR) {
@@ -221,9 +255,71 @@ public class Game {
     // Render
     // -----------------------------------------
     public void render() {
+
+        long start = System.nanoTime();
+
         renderer.beginFrame();
-        renderer.drawWorld();
+        renderer.drawWorld(this);
         renderer.drawGUI();
         renderer.endFrame();
+
+        this.renderTimeNs = System.nanoTime() - start;
+
+        if (debugVisible) {
+            drawDebugOverlay();
+        }
+        
+
     }
+
+    private void drawDebugOverlay() {
+
+        // Switch to orthographic projection
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+        GL11.glOrtho(0, 1280, 720, 0, -1, 1);
+    
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPushMatrix();
+        GL11.glLoadIdentity();
+    
+        // Disable depth so text is visible
+        GL11.glDisable(GL11.GL_DEPTH_TEST);
+    
+        // Draw white background
+        GL11.glColor3f(1f, 1f, 1f);
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2f(0, 0);
+        GL11.glVertex2f(300, 0);
+        GL11.glVertex2f(300, 100);
+        GL11.glVertex2f(0, 100);
+        GL11.glEnd();
+    
+        // Draw black text
+        textRenderer.drawText("FPS: " + (int)fps, 10, 10, 1.0f, 0f, 0f, 0f);
+        textRenderer.drawText("Lighting: " + (this.lightingTimeNs / 1_000_000f) + " ms", 10, 30, 1.0f, 0f, 0f, 0f);
+        textRenderer.drawText("Render: " + (this.renderTimeNs / 1_000_000f) + " ms", 10, 50, 1.0f, 0f, 0f, 0f);
+        printDebugToTerminal();
+
+        // Restore matrices
+        GL11.glEnable(GL11.GL_DEPTH_TEST);
+    
+        GL11.glMatrixMode(GL11.GL_PROJECTION);
+        GL11.glPopMatrix();
+    
+        GL11.glMatrixMode(GL11.GL_MODELVIEW);
+        GL11.glPopMatrix();
+    }
+
+    private void printDebugToTerminal() {
+        System.out.print("\033[2J\033[H"); // clear + home
+    
+        System.out.println("=== DEBUG INFO ===");
+        System.out.println("FPS: " + (int)fps);
+        System.out.println("Lighting: " + (this.lightingTimeNs / 1_000_000f) + " ms");
+        System.out.println("Render: " + (this.renderTimeNs / 1_000_000f) + " ms");
+    }
+    
+    
 }

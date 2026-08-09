@@ -89,24 +89,63 @@ public class WorldGen {
     // ---------------------------------------------------------
     public void generate(Chunk chunk) {
 
+        Random rng = new Random(
+            (chunk.cx * 734287) ^ (chunk.cz * 912931) ^ 1337
+        );
+    
         for (int y = 0; y < World.CHUNK_SIZE_Y; y++) {
             for (int z = 0; z < World.CHUNK_SIZE_Z; z++) {
                 for (int x = 0; x < World.CHUNK_SIZE_X; x++) {
-
+    
                     float wx = chunk.cx * World.CHUNK_SIZE_X + x;
                     float wz = chunk.cz * World.CHUNK_SIZE_Z + z;
-
-                    // Smooth Perlin height
+    
                     float noise = octavePerlin(wx, wz, 5, 0.5f, 180f);
-
-                    // Scale to world height
                     float terrainHeight = noise * 40f + 20f;
                     int roundedHeight = Math.round(terrainHeight);
-
+    
                     int worldY = chunk.cy * World.CHUNK_SIZE_Y + y;
-
+    
                     if (worldY == roundedHeight) {
                         chunk.setBlock(x, y, z, Block.GRASS);
+    
+                        // -------------------------------------------------
+                        // TREE GENERATION (5 / 1000 chance)
+                        // -------------------------------------------------
+                        if (rng.nextInt(1000) < 5) {
+    
+                            // trunk height
+                            int trunkHeight = 3;
+    
+                            // place trunk
+                            for (int ty = 1; ty <= trunkHeight; ty++) {
+                                int yy = y + ty;
+                                if (yy < World.CHUNK_SIZE_Y)
+                                    chunk.setBlock(x, yy, z, Block.WOOD);
+                            }
+    
+                            // leaves center
+                            int topY = y + trunkHeight;
+    
+                            // simple 3x3x3 leaf blob
+                            for (int lx = -1; lx <= 1; lx++) {
+                                for (int ly = -1; ly <= 1; ly++) {
+                                    for (int lz = -1; lz <= 1; lz++) {
+    
+                                        int xx = x + lx;
+                                        int yy = topY + ly;
+                                        int zz = z + lz;
+    
+                                        if (xx < 0 || xx >= World.CHUNK_SIZE_X) continue;
+                                        if (yy < 0 || yy >= World.CHUNK_SIZE_Y) continue;
+                                        if (zz < 0 || zz >= World.CHUNK_SIZE_Z) continue;
+    
+                                        chunk.setBlock(xx, yy, zz, Block.LEAVES);
+                                    }
+                                }
+                            }
+                        }
+    
                     } else if (worldY < roundedHeight) {
                         chunk.setBlock(x, y, z, Block.STONE);
                     } else {
@@ -116,4 +155,5 @@ public class WorldGen {
             }
         }
     }
+    
 }

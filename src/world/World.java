@@ -9,11 +9,11 @@ import worldgen.WorldGen;
 public class World {
 
     public static final int CHUNK_SIZE_X = 16;
-    public static final int CHUNK_SIZE_Y = 32;   // vertical
+    public static final int CHUNK_SIZE_Y = 64;   // vertical
     public static final int CHUNK_SIZE_Z = 16;
 
-    // You said you added this — good.
-    public static final int WORLD_HEIGHT = 32;
+    
+    public static final int WORLD_HEIGHT = 64;
 
     private final HashMap<Long, Chunk> chunks = new HashMap<>();
     private WorldGen generator;

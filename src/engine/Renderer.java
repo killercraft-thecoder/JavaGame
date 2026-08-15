@@ -17,13 +17,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 /**
- * Renderer with two temporary performance hacks:
- *  1) Skip chunks that are behind the camera (cheap dot test).
- *  2) Render far chunks (>= 75% of render distance) with a flat average color shader
- *     to avoid texture sampling and heavy fragment work.
+ * Renderer with two temporary performance hacks: 1) Skip chunks that are behind
+ * the camera (cheap dot test). 2) Render far chunks (>= 75% of render distance)
+ * with a flat average color shader to avoid texture sampling and heavy fragment
+ * work.
  *
- * Camera position and forward vector are derived from the view matrix so this file
- * does not depend on any Game camera accessors.
+ * Camera position and forward vector are derived from the view matrix so this
+ * file does not depend on any Game camera accessors.
  */
 public class Renderer {
 
@@ -133,43 +133,47 @@ public class Renderer {
             return; // avoid undefined shader state
         }
 
-        // Derive camera position and forward vector from the view matrix
-        // view[] is expected to be a 4x4 column-major matrix (as used with glUniformMatrix4fv)
-        float[] camPos = extractCameraPositionFromView(view);
-        float[] camForward = extractCameraForwardFromView(view);
+        float[] camPos = game.getCameraPosition();
+        float[] camForward = game.getCameraForward();
 
         // Render distance in chunks (assumed)
         int renderDistanceChunks = gui.getRenderDistance();
-        // threshold: 75% of render distance
         float farThresholdChunks = renderDistanceChunks * 0.75f;
 
-        // Precompute chunk-size in world units (blocks)
         final float chunkSizeX = World.CHUNK_SIZE_X;
         final float chunkSizeZ = World.CHUNK_SIZE_Z;
 
         for (Chunk chunk : world.getVisibleChunks(game)) {
-            if (!chunk.hasMesh()) continue;
+            if (!chunk.hasMesh()) {
+                continue;
+            }
 
             // Compute chunk center in world (block) coordinates
             float chunkCenterX = chunk.cx * chunkSizeX + chunkSizeX * 0.5f;
             float chunkCenterZ = chunk.cz * chunkSizeZ + chunkSizeZ * 0.5f;
+
             float dx = chunkCenterX - camPos[0];
             float dz = chunkCenterZ - camPos[2];
 
+            // world-space distance in blocks (XZ plane)
+            float distBlocks = (float) Math.sqrt(dx * dx + dz * dz);
+
+// convert to chunk units
+            float distChunks = distBlocks / chunkSizeX;
+
+// use threshold in chunks
+            //boolean useFlat = distChunks >= farThresholdChunks;
+            boolean useFlat = false;
             // 1) Skip chunks that are behind the camera (cheap dot test)
             float vx = dx;
             float vz = dz;
             float fwx = camForward[0];
             float fwz = camForward[2];
             float dot = vx * fwx + vz * fwz;
-            if (dot < 0f) {
-                // chunk is behind camera; skip drawing it
-                continue;
-            }
-
-            // 2) Decide LOD: near (textured) or far (flat)
-            float distChunks = (float)Math.sqrt((dx*dx + dz*dz) / (chunkSizeX*chunkSizeX));
-            boolean useFlat = distChunks >= farThresholdChunks;
+            //if (dot < -0.1f) {
+            //    // chunk is behind camera; skip drawing it
+            //     continue;
+            //}
 
             if (useFlat) {
                 // Flat LOD: cheap color shader, no texture bound
@@ -177,12 +181,18 @@ public class Renderer {
 
                 int viewLoc = glGetUniformLocation(flatProgram, "view");
                 int projLoc = glGetUniformLocation(flatProgram, "projection");
-                if (viewLoc >= 0) glUniformMatrix4fv(viewLoc, false, view);
-                if (projLoc >= 0) glUniformMatrix4fv(projLoc, false, projection);
+                if (viewLoc >= 0) {
+                    glUniformMatrix4fv(viewLoc, false, view);
+                }
+                if (projLoc >= 0) {
+                    glUniformMatrix4fv(projLoc, false, projection);
+                }
 
                 float[] avg = computeChunkAverageColor(chunk);
                 int colorLoc = glGetUniformLocation(flatProgram, "uColor");
-                if (colorLoc >= 0) glUniform3f(colorLoc, avg[0], avg[1], avg[2]);
+                if (colorLoc >= 0) {
+                    glUniform3f(colorLoc, avg[0], avg[1], avg[2]);
+                }
 
                 glBindVertexArray(chunk.getVAO());
                 glDrawElements(GL_TRIANGLES, chunk.getIndexCount(), GL_UNSIGNED_INT, 0);
@@ -250,8 +260,8 @@ public class Renderer {
     // Cheap chunk color estimation
     // -----------------------------
     private float[] computeChunkAverageColor(Chunk chunk) {
-        int[] sampleX = { World.CHUNK_SIZE_X/2, 2, World.CHUNK_SIZE_X-3, 2, World.CHUNK_SIZE_X-3 };
-        int[] sampleZ = { World.CHUNK_SIZE_Z/2, 2, 2, World.CHUNK_SIZE_Z-3, World.CHUNK_SIZE_Z-3 };
+        int[] sampleX = {World.CHUNK_SIZE_X / 2, 2, World.CHUNK_SIZE_X - 3, 2, World.CHUNK_SIZE_X - 3};
+        int[] sampleZ = {World.CHUNK_SIZE_Z / 2, 2, 2, World.CHUNK_SIZE_Z - 3, World.CHUNK_SIZE_Z - 3};
 
         float r = 0f, g = 0f, b = 0f;
         int count = 0;
@@ -277,7 +287,7 @@ public class Renderer {
             return new float[]{0.4f, 0.7f, 1.0f};
         }
 
-        return new float[]{ r / count, g / count, b / count };
+        return new float[]{r / count, g / count, b / count};
     }
 
     private float[] blockIdToColor(int id) {
@@ -295,60 +305,4 @@ public class Renderer {
         }
     }
 
-    // -----------------------------
-    // Camera helpers (derive from view matrix)
-    // -----------------------------
-    /**
-     * Extract camera world position from the view matrix.
-     * Assumes view is a 4x4 column-major matrix (as used with glUniformMatrix4fv).
-     * For an affine view matrix M = [ R | T; 0 1 ] where M transforms world->camera:
-     * cameraPos = -R^T * T
-     */
-    private float[] extractCameraPositionFromView(float[] viewMat) {
-        // translation components (column-major indices 12,13,14)
-        float tx = viewMat[12];
-        float ty = viewMat[13];
-        float tz = viewMat[14];
-
-        // rotation matrix R (upper-left 3x3), column-major layout
-        float r00 = viewMat[0], r01 = viewMat[4], r02 = viewMat[8];
-        float r10 = viewMat[1], r11 = viewMat[5], r12 = viewMat[9];
-        float r20 = viewMat[2], r21 = viewMat[6], r22 = viewMat[10];
-
-        // cameraPos = -R^T * T
-        float cx = -(r00 * tx + r10 * ty + r20 * tz);
-        float cy = -(r01 * tx + r11 * ty + r21 * tz);
-        float cz = -(r02 * tx + r12 * ty + r22 * tz);
-
-        return new float[]{cx, cy, cz};
-    }
-
-    /**
-     * Extract camera forward vector (normalized) from the view matrix.
-     * We compute forward = - (R^T * (0,0,1)) = -third row of R^T = -third column of R.
-     * For column-major R, third column is (r02, r12, r22).
-     */
-    private float[] extractCameraForwardFromView(float[] viewMat) {
-        float r02 = viewMat[8];
-        float r12 = viewMat[9];
-        float r22 = viewMat[10];
-
-        // forward = - (r02, r12, r22)
-        float fx = -r02;
-        float fy = -r12;
-        float fz = -r22;
-
-        // normalize
-        float len = (float)Math.sqrt(fx*fx + fy*fy + fz*fz);
-        if (len > 1e-6f) {
-            fx /= len;
-            fy /= len;
-            fz /= len;
-        } else {
-            // fallback forward along -Z
-            fx = 0f; fy = 0f; fz = -1f;
-        }
-
-        return new float[]{fx, fy, fz};
-    }
 }

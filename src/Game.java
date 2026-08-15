@@ -66,6 +66,26 @@ public class Game {
 
     }
 
+    public float[] getCameraPosition() {
+        return new float[]{ px, py, pz };
+    }
+    
+    public float[] getCameraForward() {
+        // forward vector from yaw/pitch (same math Camera.look uses)
+        float cy = (float)Math.cos(Math.toRadians(yaw));
+        float sy = (float)Math.sin(Math.toRadians(yaw));
+        float cp = (float)Math.cos(Math.toRadians(pitch));
+        float sp = (float)Math.sin(Math.toRadians(pitch));
+    
+        float fx = sy * cp;
+        float fy = sp;
+        float fz = -cy * cp;
+    
+        return new float[]{ fx, fy, fz };
+    }
+    
+    
+
     // -----------------------------------------
     // Update loop
     // -----------------------------------------

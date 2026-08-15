@@ -1,0 +1,11 @@
+{
+    "notebook.output.minimalErrorRendering": false,
+    "jdk.java.imports.groups": [
+        
+        "java",
+        "javax",
+        "org",
+        "com",
+        ""
+    ]
+}
